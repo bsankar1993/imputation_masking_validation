@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import argparse
+import json
 
 class ImputationAnalysis:
     def __init__(self, imputation, n_imputations):
@@ -21,9 +22,11 @@ class ImputationAnalysis:
             os.makedirs(self.output_dir)
     
     def run_analysis(self):
+        scores = {}
         for m in self.mask:
             sse_mask = []
             ovss = []
+            scores[m] = {}
             for f in self.folders:
                 masked_data = pd.read_csv(f + self.masked_data_files + str(m) + '.csv')
                 masked_indices = masked_data.loc[masked_data['A0'].isnull(), 'A0'].index
@@ -59,19 +62,30 @@ class ImputationAnalysis:
                 sse_n_total = np.mean(sse_n_total)
                 sse_mask.append(sse_n_total)
             
+            
             nrmse = np.sum(sse_mask) / sum(ovss)
             print(f'{nrmse} for {m}')
+            scores[m]['nrmse'] = nrmse
+            scores[m]['ovss'] = ovss
+            scores[m]['sse_mask'] = sse_mask
+            scores[m]['nrmse_individual'] = [sse / ovss[i] for i, sse in enumerate(sse_mask)]
+
+
             
-            with open(f'{self.output_dir}/nrmse.csv', 'a') as f:
-                f.write(f'{nrmse},{m},{self.imputation}\n')
+            with open(f'{self.output_dir}/{self.imputation}_nrmse_a0.json', 'w') as f:
+                json.dump(scores, f, indent=2)
 
 def main():
-    parser = argparse.ArgumentParser(description='Run imputation analysis.')
-    parser.add_argument('imputation', type=str, help='Type of imputation method: {dmi_np, si_mean, knn_30}')
-    parser.add_argument('n_imputations', type=int, help='Number of imputated datasets; 10 if dmi_np, 1 otherwise')
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser(description='Run imputation analysis.')
+    # parser.add_argument('imputation', type=str, help='Type of imputation method: {dmi_np, si_mean, knn_30}')
+    # parser.add_argument('n_imputations', type=int, help='Number of imputated datasets; 10 if dmi_np, 1 otherwise')
+    # args = parser.parse_args()
     
-    analysis = ImputationAnalysis(args.imputation, args.n_imputations)
+    analysis = ImputationAnalysis('dmi_np', 10)
+    analysis.run_analysis()
+    analysis = ImputationAnalysis('si_mean', 1)
+    analysis.run_analysis()
+    analysis = ImputationAnalysis('knn_30', 1)
     analysis.run_analysis()
 
 if __name__ == "__main__":

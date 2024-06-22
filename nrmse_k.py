@@ -21,8 +21,6 @@ class ImputationAnalysis:
         os.makedirs(self.output_dir, exist_ok=True)
     
     def calculate_nrmse(self, imputed_data, true_data):
-        #filter by well fit peptides 
-        # imputed_data = imputed_data.loc[(imputed_data['R2'] >= 0.8) | (imputed_data['SS'] <= 0.05)]
         imputed_data = imputed_data.loc[(imputed_data['k'] >= 0) & (imputed_data['k'] <= 60)] 
         true_data = true_data.loc[(true_data['k'] >= 0) & (true_data['k'] <= 60)] 
         true_data = true_data.loc[(true_data['R2'] >= 0.8) | (true_data['SS'] <= 0.05)] 
@@ -69,10 +67,12 @@ class ImputationAnalysis:
 
     def run_analysis(self):
         scores = {}
+        sse_mask = {}
+        nf_mask = {}
         for m in self.mask:
             scores[m] = {}
-            sse_mask = []
-            nf_mask = []
+            sse_mask[m] = []
+            nf_mask[m] = []
             counts = []
             trues_all = []
             imputes_all = []
@@ -87,8 +87,8 @@ class ImputationAnalysis:
 
                 sse,nf, count, trues, imputes = self.calculate_nrmse(imputed_data, true_data) 
 
-                sse_mask.append(sse)
-                nf_mask.append(nf)
+                sse_mask[m].append(sse)
+                nf_mask[m].append(nf)
                 counts.append(count)
                 trues_all.extend(trues)
                 imputes_all.extend(imputes)
@@ -99,12 +99,17 @@ class ImputationAnalysis:
             plt.savefig(os.path.join(self.output_dir, f'scatter_{self.imputation}_{m}.png'))
             plt.close()
 
-            nrmse = sum(sse_mask) / sum(nf_mask)
+            sse_total = sum(sse_mask[m])
+            nf_total = sum(nf_mask[m])
+            nrmse = sse_total/nf_total
             print(f'{nrmse} for {m}')
 
             scores[m]['nrmse'] = nrmse
-            scores[m]['sse'] = sum(sse_mask)
-            scores[m]['nf'] = sum(nf_mask)
+            scores[m]['sse'] = sse_total
+            scores[m]['nf'] = nf_total
+            scores[m]['sse_individual'] = sse_mask[m]
+            scores[m]['nf_individual'] = nf_mask[m]
+            scores[m]['nrmses'] = [sse/nf for sse, nf in zip(sse_mask[m], nf_mask[m])]
             scores[m]['count'] = sum(counts)
         with open(f'{self.output_dir}/{self.imputation}_nrmse.json', 'w') as f:
             json.dump(scores, f, indent=2)
